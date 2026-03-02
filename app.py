@@ -22,26 +22,30 @@ except Exception as e:
 @app.route("/api/telemetry", methods=["POST"])
 def receive_telemetry():
 
-    if model is None:
-        return jsonify({"error": "Model not loaded"}), 500
-
     data = request.json
-
-    if not data:
-        return jsonify({"error": "No JSON received"}), 400
-
     obd = data.get("obd", {})
 
     try:
-        # IMPORTANT:
-        # Feature order must match your model training
-        rpm = float(obd.get("rpm", 0))
-        coolant = float(obd.get("coolant_c", 0))
-        oil_pressure = float(obd.get("oil_pressure_kpa", 0))
-        battery = float(obd.get("battery_v", 0))
         speed = float(obd.get("speed_kmph", 0))
+        rpm = float(obd.get("rpm", 0))
+        engine_temp = float(obd.get("coolant_c", 0))
+        brake_pressure = float(obd.get("oil_pressure_kpa", 0))  # substitute
+        battery_voltage = float(obd.get("battery_v", 0))
 
-        features = np.array([[rpm, coolant, oil_pressure, battery, speed]])
+        gear_str = obd.get("gear_position", "P")
+
+        # Encode gear (must match training encoding)
+        gear_map = {"P": 0, "N": 1, "R": 2, "D": 3}
+        gear = gear_map.get(gear_str, 0)
+
+        features = [[
+            speed,
+            rpm,
+            engine_temp,
+            brake_pressure,
+            battery_voltage,
+            gear
+        ]]
 
         health_score = model.predict(features)[0]
         health_score = round(float(health_score), 2)
@@ -55,8 +59,8 @@ def receive_telemetry():
         })
 
     except Exception as e:
-        print("❌ Prediction Error:", e)
-        return jsonify({"error": "Prediction failed"}), 500
+        print("Prediction Error:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 # -------------------------------
